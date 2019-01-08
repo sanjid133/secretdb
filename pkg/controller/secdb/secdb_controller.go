@@ -18,18 +18,22 @@ package secdb
 
 import (
 	"context"
-	"reflect"
+	"fmt"
+	"github.com/sanjid133/secdb/util"
+	"k8s.io/klog"
+
+	//"reflect"
 
 	secdbv1beta1 "github.com/sanjid133/secdb/pkg/apis/secdb/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
+	//appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	//"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	//"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -63,15 +67,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	fmt.Println("Watching secdb")
 	// Watch for changes to SecDb
 	err = c.Watch(&source.Kind{Type: &secdbv1beta1.SecDb{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by SecDb - change this for objects you create
-	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
+	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &secdbv1beta1.SecDb{},
 	})
@@ -100,9 +103,12 @@ type ReconcileSecDb struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets/status,verbs=get;update;patch
 func (r *ReconcileSecDb) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	fmt.Println("reconciling.")
+
+	ctx := context.TODO()
 	// Fetch the SecDb instance
 	instance := &secdbv1beta1.SecDb{}
-	err := r.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Object not found, return.  Created objects are automatically garbage collected.
@@ -113,57 +119,49 @@ func (r *ReconcileSecDb) Reconcile(request reconcile.Request) (reconcile.Result,
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this to be the object type created by your controller
-	// Define the desired Deployment object
-	deploy := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name + "-deployment",
-			Namespace: instance.Namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"deployment": instance.Name + "-deployment"},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"deployment": instance.Name + "-deployment"}},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx",
-						},
-					},
-				},
-			},
-		},
-	}
-	if err := controllerutil.SetControllerReference(instance, deploy, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
+	// Implement controller logic here
+	name := instance.Name
+	klog.Infof("Running reconcile SecDb for %s\n", name)
 
-	// TODO(user): Change this for the object type created by your controller
-	// Check if the Deployment already exists
-	found := &appsv1.Deployment{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		log.Info("Creating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Create(context.TODO(), deploy)
-		if err != nil {
+	// If object hasn't been deleted and doesn't have a finalizer, add one
+	// Add a finalizer to newly created objects.
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() &&
+		!util.Contains(instance.ObjectMeta.Finalizers, secdbv1beta1.SecDbFinalizer) {
+		instance.Finalizers = append(instance.Finalizers, secdbv1beta1.SecDbFinalizer)
+		if err = r.Client.Update(ctx, instance); err != nil {
+			klog.Infof("failed to add finalizer to machine object %v due to error %v.", name, err)
 			return reconcile.Result{}, err
 		}
-	} else if err != nil {
-		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this for the object type created by your controller
-	// Update the found object and write the result back if there are any changes
-	if !reflect.DeepEqual(deploy.Spec, found.Spec) {
-		found.Spec = deploy.Spec
-		log.Info("Updating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Update(context.TODO(), found)
-		if err != nil {
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// no-op if finalizer has been removed.
+		if !util.Contains(instance.ObjectMeta.Finalizers, secdbv1beta1.SecDbFinalizer) {
+			klog.Infof("reconciling secdb object %v causes a no-op as there is no finalizer.", name)
+			return reconcile.Result{}, nil
+		}
+
+		klog.Infof("reconciling secdb object %v triggers delete.", name)
+		if err := r.drop(instance); err != nil {
+			klog.Errorf("Error deleting secdb object %v; %v", name, err)
+			// requee ???
 			return reconcile.Result{}, err
 		}
+
+		// Remove finalizer on successful deletion.
+		klog.Infof("secdb object %v deletion successful, removing finalizer.", name)
+		instance.ObjectMeta.Finalizers = util.Filter(instance.ObjectMeta.Finalizers, secdbv1beta1.SecDbFinalizer)
+		if err := r.Client.Update(context.Background(), instance); err != nil {
+			klog.Errorf("Error removing finalizer from secdb object %v; %v", name, err)
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{}, nil
+	}
+
+	klog.Infof("Reconciling secdb object %v triggers idempotent create.", instance.ObjectMeta.Name)
+	if err := r.upsert(ctx, instance); err != nil {
+		klog.Warningf("unable to create secdb %v: %v", name, err)
+		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, nil
 }

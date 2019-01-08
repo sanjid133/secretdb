@@ -6,4 +6,9 @@ metadata:
   name: secdb-sample
 spec:
   # Add fields here
-  foo: bar
+  type: Opaque
+  entities:
+  - name: abc
+    data:
+      username: xyz,
+      password: password

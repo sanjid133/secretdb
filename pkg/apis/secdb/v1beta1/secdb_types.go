@@ -23,6 +23,11 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// Finalizer is set on PrepareForCreate callback
+const SecDbFinalizer = "finalizer.secdb.k8s.io"
+
+const SecDbLabel = "secret.db.name"
+
 // SecDbSpec defines the desired state of SecDb
 type SecDbSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -51,7 +56,7 @@ type SecDbStatus struct {
 	Status string `json:"status"`
 }
 
-// +kubebuilder:printcolumn:name="Entity",type="integer",JSONPath="len(.spec.entities)",description="status of the kind"
+// +kubebuilder:printcolumn:name="Type",type="string",JSONPath=".spec.type)",description="status of the kind"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

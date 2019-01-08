@@ -18,15 +18,11 @@ package main
 
 import (
 	"flag"
-	"k8s.io/client-go/kubernetes"
-	"os"
-	"time"
-
 	"github.com/sanjid133/secdb/pkg/apis"
 	"github.com/sanjid133/secdb/pkg/controller"
 	"github.com/sanjid133/secdb/pkg/webhook"
-	kubeinformers "k8s.io/client-go/informers"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -78,7 +74,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create the InformerFactory
+	/*// Create the InformerFactory
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	generatedInformers := kubeinformers.NewSharedInformerFactory(generatedClient, time.Minute*30)
 
@@ -89,7 +85,7 @@ func main() {
 	if err != nil {
 		log.Error(err, "Unable to add InformerFactory to the Manager")
 		os.Exit(1)
-	}
+	}*/
 
 	// Start the Cmd
 	log.Info("Starting the Cmd.")

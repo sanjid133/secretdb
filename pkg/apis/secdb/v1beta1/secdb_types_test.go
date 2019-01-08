@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta1
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/onsi/gomega"
@@ -55,6 +57,8 @@ func TestStorageSecDb(t *testing.T) {
 			Status: "Testing",
 		},
 	}
+	d, e := json.Marshal(created)
+	fmt.Println(string(d), e)
 	g := gomega.NewGomegaWithT(t)
 
 	// Test Create
