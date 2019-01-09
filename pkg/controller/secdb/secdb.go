@@ -53,7 +53,6 @@ func (r *ReconcileSecDb) upsert(ctx context.Context, secdb *secdbv1beta1.SecDb) 
 		return err
 	}
 
-
 	for _, rs := range seclist.Items {
 		if _, found := currentSecrets[rs.Name]; !found && rs.Labels[secdbv1beta1.SecDbLabel] == secdb.Name {
 			if err = r.Delete(ctx, &rs); err != nil {
